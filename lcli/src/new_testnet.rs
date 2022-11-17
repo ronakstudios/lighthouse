@@ -123,6 +123,7 @@ pub fn run<T: EthSpec>(testnet_dir_path: PathBuf, matches: &ArgMatches) -> Resul
         boot_enr: Some(vec![]),
         genesis_state_bytes,
         config: Config::from_chain_spec::<T>(&spec),
+        extra_config: None,
     };
 
     testnet.write_to_file(testnet_dir_path, overwrite_files)

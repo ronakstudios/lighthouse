@@ -173,9 +173,15 @@ pub struct ChainSpec {
 
 impl ChainSpec {
     /// Construct a `ChainSpec` from a standard config.
-    pub fn from_config<T: EthSpec>(config: &Config) -> Option<Self> {
+    pub fn from_config<T: EthSpec>(config: &Config, option_extra_config: &Option<ExtraConfig>) -> Option<Self> {
         let spec = T::default_spec();
-        config.apply_to_chain_spec::<T>(&spec)
+        if option_extra_config.is_some() {
+            let extra_config = option_extra_config.as_ref().unwrap();
+            let tmp_spec = extra_config.apply_to_chain_spec::<T>(&spec);
+            config.apply_to_chain_spec::<T>(tmp_spec.as_ref().unwrap())
+        }else{
+            config.apply_to_chain_spec::<T>(&spec)
+        }
     }
 
     /// Returns an `EnrForkId` for the given `slot`.
@@ -465,7 +471,7 @@ impl ChainSpec {
              * Misc
              */
             max_committees_per_slot: 64,
-            target_committee_size: 128,
+            target_committee_size: 2,
             min_per_epoch_churn_limit: 4,
             churn_limit_quotient: 65_536,
             shuffle_round_count: 90,
@@ -828,6 +834,46 @@ impl Default for ChainSpec {
         Self::mainnet()
     }
 }
+/// Exact implementation of the *config* object from the Ethereum spec (YAML/JSON).
+///
+/// Fields relevant to hard forks after Altair should be optional so that we can continue
+/// to parse Altair configs. This default approach turns out to be much simpler than trying to
+/// make `Config` a superstruct because of the hassle of deserializing an untagged enum.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[serde(rename_all = "UPPERCASE")]
+pub struct ExtraConfig {
+    #[serde(with = "eth2_serde_utils::quoted_u64")]
+    pub max_committees_per_slot: u64
+}
+
+impl ExtraConfig {
+    
+    pub fn from_chain_spec<T: EthSpec>(spec: &ChainSpec) -> Self {
+        Self {
+            max_committees_per_slot: spec.max_committees_per_slot as u64,
+        }
+    }
+
+    pub fn from_file(filename: &Path) -> Result<Self, String> {
+        let f = File::open(filename)
+            .map_err(|e| format!("Error opening spec at {}: {:?}", filename.display(), e))?;
+        serde_yaml::from_reader(f)
+            .map_err(|e| format!("Error parsing spec at {}: {:?}", filename.display(), e))
+    }
+
+    pub fn apply_to_chain_spec<T: EthSpec>(&self, chain_spec: &ChainSpec) -> Option<ChainSpec> {
+        // Pattern match here to avoid missing any fields.
+        let &ExtraConfig {
+            max_committees_per_slot,
+        } = self;
+
+        Some(ChainSpec {
+            max_committees_per_slot: max_committees_per_slot as usize,
+            ..chain_spec.clone()
+        })
+    }
+}
+
 
 /// Exact implementation of the *config* object from the Ethereum spec (YAML/JSON).
 ///

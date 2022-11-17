@@ -16,7 +16,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::{sync::RwLock, time::sleep};
-use types::{ChainSpec, Config, EthSpec};
+use types::{ChainSpec, Config, EthSpec, ExtraConfig};
 
 /// The number of seconds *prior* to slot start that we will try and update the state of fallback
 /// nodes.
@@ -236,8 +236,9 @@ impl<E: EthSpec> CandidateBeaconNode<E> {
                 CandidateError::Offline
             })?
             .data;
-
-        let beacon_node_spec = ChainSpec::from_config::<E>(&config).ok_or_else(|| {
+        
+        let extra_config: Option<ExtraConfig> = None;
+        let beacon_node_spec = ChainSpec::from_config::<E>(&config, &extra_config).ok_or_else(|| {
             error!(
                 log,
                 "The minimal/mainnet spec type of the beacon node does not match the validator \

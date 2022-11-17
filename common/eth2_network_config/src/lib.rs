@@ -13,10 +13,10 @@
 
 use enr::{CombinedKey, Enr};
 use eth2_config::{instantiate_hardcoded_nets, HardcodedNet};
-use std::fs::{create_dir_all, File};
+use std::fs::{create_dir_all, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use types::{BeaconState, ChainSpec, Config, EthSpec, EthSpecId};
+use types::{BeaconState, ChainSpec, Config, EthSpec, EthSpecId, ExtraConfig};
 
 pub const DEPLOY_BLOCK_FILE: &str = "deploy_block.txt";
 pub const BOOT_ENR_FILE: &str = "boot_enr.yaml";
@@ -43,6 +43,7 @@ pub struct Eth2NetworkConfig {
     pub boot_enr: Option<Vec<Enr<CombinedKey>>>,
     pub genesis_state_bytes: Option<Vec<u8>>,
     pub config: Config,
+    pub extra_config: Option<ExtraConfig>,
 }
 
 impl Eth2NetworkConfig {
@@ -69,6 +70,7 @@ impl Eth2NetworkConfig {
                 .filter(|bytes| !bytes.is_empty()),
             config: serde_yaml::from_reader(net.config)
                 .map_err(|e| format!("Unable to parse yaml config: {:?}", e))?,
+            extra_config: None,
         })
     }
 
@@ -87,7 +89,7 @@ impl Eth2NetworkConfig {
 
     /// Construct a consolidated `ChainSpec` from the YAML config.
     pub fn chain_spec<E: EthSpec>(&self) -> Result<ChainSpec, String> {
-        ChainSpec::from_config::<E>(&self.config).ok_or_else(|| {
+        ChainSpec::from_config::<E>(&self.config, &self.extra_config).ok_or_else(|| {
             format!(
                 "YAML configuration incompatible with spec constants for {}",
                 E::spec_name()
@@ -147,6 +149,30 @@ impl Eth2NetworkConfig {
             };
         }
 
+        macro_rules! append_to_yaml_file {
+            ($file: ident, $variable: expr) => {
+                OpenOptions::new().append(true).open(base_dir.join($file))
+                    .map_err(|e| format!("Unable to open {}: {:?}", $file, e))
+                    .and_then(|mut file| {
+                        let yaml = serde_yaml::to_string(&$variable)
+                            .map_err(|e| format!("Unable to YAML encode {}: {:?}", $file, e))?;
+
+                        // Remove the doc header from the YAML file.
+                        //
+                        // This allows us to play nice with other clients that are expecting
+                        // plain-text, not YAML.
+                        let no_doc_header = if let Some(stripped) = yaml.strip_prefix("---\n") {
+                            stripped
+                        } else {
+                            &yaml
+                        };
+
+                        file.write_all(no_doc_header.as_bytes())
+                            .map_err(|e| format!("Unable to write {}: {:?}", $file, e))
+                    })?
+            };
+        }
+
         write_to_yaml_file!(DEPLOY_BLOCK_FILE, self.deposit_contract_deploy_block);
 
         if let Some(boot_enr) = &self.boot_enr {
@@ -154,6 +180,10 @@ impl Eth2NetworkConfig {
         }
 
         write_to_yaml_file!(BASE_CONFIG_FILE, &self.config);
+
+        if let Some(extra_config) = &self.extra_config {
+            append_to_yaml_file!(BASE_CONFIG_FILE, extra_config)
+        }
 
         // The genesis state is a special case because it uses SSZ, not YAML.
         if let Some(genesis_state_bytes) = &self.genesis_state_bytes {
@@ -195,6 +225,7 @@ impl Eth2NetworkConfig {
         let deposit_contract_deploy_block = load_from_file!(DEPLOY_BLOCK_FILE);
         let boot_enr = optional_load_from_file!(BOOT_ENR_FILE);
         let config = load_from_file!(BASE_CONFIG_FILE);
+        let extra_config = load_from_file!(BASE_CONFIG_FILE);
 
         // The genesis state is a special case because it uses SSZ, not YAML.
         let genesis_file_path = base_dir.join(GENESIS_STATE_FILE);
@@ -217,6 +248,7 @@ impl Eth2NetworkConfig {
             boot_enr,
             genesis_state_bytes,
             config,
+            extra_config,
         })
     }
 }
@@ -322,6 +354,7 @@ mod tests {
             boot_enr,
             genesis_state_bytes: genesis_state.as_ref().map(Encode::as_ssz_bytes),
             config,
+            extra_config: None,
         };
 
         testnet
