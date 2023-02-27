@@ -843,7 +843,13 @@ impl Default for ChainSpec {
 #[serde(rename_all = "UPPERCASE")]
 pub struct ExtraConfig {
     #[serde(with = "eth2_serde_utils::quoted_u64")]
-    pub max_committees_per_slot: u64
+    pub max_committees_per_slot: u64,
+    #[serde(with = "eth2_serde_utils::quoted_u64")]
+    pub inactivity_penalty_quotient_bellatrix: u64,
+    #[serde(with = "eth2_serde_utils::quoted_u64")]
+    pub target_committee_size: u64,
+    #[serde(with = "eth2_serde_utils::quoted_u64")]
+    pub target_aggregators_per_committee: u64
 }
 
 impl ExtraConfig {
@@ -851,6 +857,9 @@ impl ExtraConfig {
     pub fn from_chain_spec<T: EthSpec>(spec: &ChainSpec) -> Self {
         Self {
             max_committees_per_slot: spec.max_committees_per_slot as u64,
+            inactivity_penalty_quotient_bellatrix: spec.inactivity_penalty_quotient_bellatrix as u64,
+            target_committee_size: spec.target_committee_size as u64,
+            target_aggregators_per_committee: spec.target_aggregators_per_committee as u64,
         }
     }
 
@@ -865,10 +874,16 @@ impl ExtraConfig {
         // Pattern match here to avoid missing any fields.
         let &ExtraConfig {
             max_committees_per_slot,
+            inactivity_penalty_quotient_bellatrix,
+            target_committee_size,
+            target_aggregators_per_committee
         } = self;
 
         Some(ChainSpec {
             max_committees_per_slot: max_committees_per_slot as usize,
+            inactivity_penalty_quotient_bellatrix,
+            target_committee_size: target_committee_size as usize,
+            target_aggregators_per_committee,
             ..chain_spec.clone()
         })
     }
