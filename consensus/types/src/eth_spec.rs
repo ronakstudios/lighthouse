@@ -242,8 +242,8 @@ impl EthSpec for MainnetEthSpec {
     type SubnetBitfieldLength = U64;
     type MaxValidatorsPerCommittee = U2048;
     type GenesisEpoch = U0;
-    type SlotsPerEpoch = U4;
-    type EpochsPerEth1VotingPeriod = U4;
+    type SlotsPerEpoch = U32;
+    type EpochsPerEth1VotingPeriod = U64;
     type SlotsPerHistoricalRoot = U8192;
     type EpochsPerHistoricalVector = U65536;
     type EpochsPerSlashingsVector = U8192;
@@ -264,7 +264,7 @@ impl EthSpec for MainnetEthSpec {
     type MaxExtraDataBytes = U32;
     type SyncSubcommitteeSize = U128; // 512 committee size / 4 sync committee subnet count
     type MaxPendingAttestations = U4096; // 128 max attestations * 32 slots per epoch
-    type SlotsPerEth1VotingPeriod = U16; // 4 epochs * 4 slots per epoch
+    type SlotsPerEth1VotingPeriod = U2048; //  epochs *  slots per epoch
 
     fn default_spec() -> ChainSpec {
         ChainSpec::mainnet()
